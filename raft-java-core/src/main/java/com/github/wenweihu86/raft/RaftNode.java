@@ -28,6 +28,7 @@ import java.util.concurrent.locks.*;
  */
 public class RaftNode {
 
+    // todo 是否通过增加Secretary角色，来分担leader的压力
     public enum NodeState {
         STATE_FOLLOWER,
         STATE_PRE_CANDIDATE,
@@ -435,6 +436,7 @@ public class RaftNode {
         if (electionScheduledFuture != null && !electionScheduledFuture.isDone()) {
             electionScheduledFuture.cancel(true);
         }
+        // todo 这里把固定获取改成：Math.min(获取最低阈值+时间, 获取最大时间)，尽量加上慢开始等计网算法
         electionScheduledFuture = scheduledExecutorService.schedule(new Runnable() {
             @Override
             public void run() {
