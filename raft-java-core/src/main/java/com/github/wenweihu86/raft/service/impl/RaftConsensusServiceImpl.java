@@ -98,6 +98,7 @@ public class RaftConsensusServiceImpl implements RaftConsensusService {
         }
     }
 
+    // todo follower应用日志
     @Override
     public RaftProto.AppendEntriesResponse appendEntries(RaftProto.AppendEntriesRequest request) {
         raftNode.getLock().lock();

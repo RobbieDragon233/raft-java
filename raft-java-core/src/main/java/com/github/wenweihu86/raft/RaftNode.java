@@ -141,6 +141,7 @@ public class RaftNode {
     }
 
     // client set command
+    // todo 理论上日志太多的创新点，但是还没看到哪里有过半
     public boolean replicate(byte[] data, RaftProto.EntryType entryType) {
         lock.lock();
         long newLastLogIndex = 0;
@@ -572,6 +573,7 @@ public class RaftNode {
             this.request = request;
         }
 
+        // todo 这里就是做选主的，一旦接受到多于一半的投票，就选主成功，而且这里有一个prevote
         @Override
         public void success(RaftProto.VoteResponse response) {
             lock.lock();
@@ -720,6 +722,7 @@ public class RaftNode {
     }
 
     // in lock, 开始心跳，对leader有效
+    // todo 心跳改动
     private void startNewHeartbeat() {
         LOG.debug("start new heartbeat, peers={}", peerMap.keySet());
         for (final Peer peer : peerMap.values()) {
@@ -734,6 +737,7 @@ public class RaftNode {
     }
 
     // in lock, for leader
+    // todo 这里，把所有人挑出来，排序找中间的数字，以此达到过半的目的
     private void advanceCommitIndex() {
         // 获取quorum matchIndex
         int peerNum = configuration.getServersList().size();
