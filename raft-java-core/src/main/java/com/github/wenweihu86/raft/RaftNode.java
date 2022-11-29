@@ -4,6 +4,7 @@ import com.baidu.brpc.client.RpcCallback;
 import com.github.wenweihu86.raft.proto.RaftProto;
 import com.github.wenweihu86.raft.storage.SegmentedLog;
 import com.github.wenweihu86.raft.util.ConfigurationUtils;
+import com.github.wenweihu86.raft.util.SecretaryUtil;
 import com.google.protobuf.ByteString;
 import com.github.wenweihu86.raft.storage.Snapshot;
 import com.google.protobuf.InvalidProtocolBufferException;
@@ -33,7 +34,8 @@ public class RaftNode {
         STATE_FOLLOWER,
         STATE_PRE_CANDIDATE,
         STATE_CANDIDATE,
-        STATE_LEADER
+        STATE_LEADER,
+        STATE_Secretary
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(RaftNode.class);
@@ -53,6 +55,7 @@ public class RaftNode {
     // 在当前获得选票的候选人的Id
     private int votedFor;
     private int leaderId; // leader节点id
+    private int secretaryId;
     // 已知的最大的已经被提交的日志条目的索引值
     private long commitIndex;
     // 最后被应用到状态机的日志条目索引值（初始化为 0，持续递增）
@@ -68,6 +71,7 @@ public class RaftNode {
     private ScheduledFuture heartbeatScheduledFuture;
 
     private DelayQueue<Peer> delayQueue;
+    private Peer secretary;
 
     public RaftNode(RaftOptions raftOptions,
                     List<RaftProto.Server> servers,
@@ -164,20 +168,50 @@ public class RaftNode {
             newLastLogIndex = raftLog.append(entries);
 //            raftLog.updateMetaData(currentTerm, null, raftLog.getFirstLogIndex());
 
-            for (RaftProto.Server server : configuration.getServersList()) {
-                final Peer peer = peerMap.get(server.getServerId());
-                executorService.submit(new Runnable() {
-                    @Override
-                    public void run() {
-                        appendEntries(peer);
-                    }
-                });
+
+            if (raftOptions.isSecretaryWrite()) {
+                if (secretary == null) {
+                    secretary = SecretaryUtil.getSecretary(peerMap, this);
+                    secretaryId = secretary.getServer().getServerId();
+                }
+                // 如果是秘书节点，则向其他节点同步
+//                if (secretaryId == localServer.getServerId()) {
+//                    for (RaftProto.Server server : configuration.getServersList()) {
+//                        final Peer peer = peerMap.get(server.getServerId());
+//                        if (peer.getServer().getServerId() != secretaryId &&
+//                                peer.getServer().getServerId() != this.getLeaderId()) {
+//                            executorService.submit(new Runnable() {
+//                                @Override
+//                                public void run() {
+//                                    // todo 失败重试
+//                                    appendEntries(peer);
+//                                }
+//                            });
+//                        }
+//
+//                    }
+//                }
+                appendEntries(secretary);
+            }else {
+                for (RaftProto.Server server : configuration.getServersList()) {
+                    final Peer peer = peerMap.get(server.getServerId());
+                    executorService.submit(new Runnable() {
+                        @Override
+                        public void run() {
+                            appendEntries(peer);
+                        }
+                    });
+                }
             }
+
+
 
             if (raftOptions.isAsyncWrite()) {
                 // 主节点写成功后，就返回。
                 return true;
             }
+
+
 
             // sync wait commitIndex >= newLastLogIndex
             long startTime = System.currentTimeMillis();
@@ -193,12 +227,23 @@ public class RaftNode {
             lock.unlock();
         }
         LOG.debug("lastAppliedIndex={} newLastLogIndex={}", lastAppliedIndex, newLastLogIndex);
-        if (lastAppliedIndex < newLastLogIndex) {
+        if (raftOptions.isSecretaryWrite() &&
+                this.localServer.getServerId() == this.getSecretaryId() &&
+                lastAppliedIndex < newLastLogIndex) {
+            // todo 失败了，再试一下；这里应该有递减
+            replicate(data, entryType);
             return false;
+        }
+        if (raftOptions.isSecretaryWrite() &&
+                this.localServer.getServerId() == this.getLeaderId() &&
+                this.secretary.getMatchIndex() < newLastLogIndex) {
+            return false;
+
         }
         return true;
     }
 
+    // todo 普通append的收发都在里面
     public void appendEntries(Peer peer) {
         RaftProto.AppendEntriesRequest.Builder requestBuilder = RaftProto.AppendEntriesRequest.newBuilder();
         long prevLogIndex;
@@ -258,6 +303,12 @@ public class RaftNode {
         RaftProto.AppendEntriesRequest request = requestBuilder.build();
         RaftProto.AppendEntriesResponse response = peer.getRaftConsensusServiceAsync().appendEntries(request);
 
+        checkAppendResponse(peer, response, prevLogIndex, numEntries);
+    }
+
+    public void checkAppendResponse(Peer peer, RaftProto.AppendEntriesResponse response,
+                                     long prevLogIndex,
+                                     long numEntries) {
         lock.lock();
         try {
             if (response == null) {
@@ -825,6 +876,15 @@ public class RaftNode {
         return lastIndex - nextIndex + 1;
     }
 
+    public long proxyPackEntries(long nextIndex){
+        long lastIndex = Math.min(raftLog.getLastLogIndex(),
+                nextIndex + raftOptions.getMaxLogEntriesPerRequest() - 1);
+        for (long index = nextIndex; index <= lastIndex; index++) {
+            RaftProto.LogEntry entry = raftLog.getEntry(index);
+        }
+        return lastIndex - nextIndex + 1;
+    }
+
     private boolean installSnapshot(Peer peer) {
         if (snapshot.getIsTakeSnapshot().get()) {
             LOG.info("already in take snapshot, please send install snapshot request later");
@@ -1011,6 +1071,14 @@ public class RaftNode {
 
     public void setLeaderId(int leaderId) {
         this.leaderId = leaderId;
+    }
+
+    public int getSecretaryId() {
+        return secretaryId;
+    }
+
+    public void setSecretaryId(int secretaryId) {
+        this.secretaryId = secretaryId;
     }
 
     public Snapshot getSnapshot() {

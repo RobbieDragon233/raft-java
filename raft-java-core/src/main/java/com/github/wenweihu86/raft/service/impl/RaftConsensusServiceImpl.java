@@ -1,5 +1,6 @@
 package com.github.wenweihu86.raft.service.impl;
 
+import com.github.wenweihu86.raft.Peer;
 import com.github.wenweihu86.raft.RaftNode;
 import com.github.wenweihu86.raft.proto.RaftProto;
 import com.github.wenweihu86.raft.service.RaftConsensusService;
@@ -102,6 +103,20 @@ public class RaftConsensusServiceImpl implements RaftConsensusService {
     @Override
     public RaftProto.AppendEntriesResponse appendEntries(RaftProto.AppendEntriesRequest request) {
         raftNode.getLock().lock();
+        final int secretaryId = raftNode.getSecretaryId();
+        final int leaderId = raftNode.getLeaderId();
+        final int myId = raftNode.getLocalServer().getServerId();
+        if (myId == secretaryId) {
+            for (Peer peer : raftNode.getPeerMap().values()) {
+                if (peer.getServer().getServerId() != secretaryId &&
+                        peer.getServer().getServerId() != leaderId) {
+                    RaftProto.AppendEntriesResponse response = peer.getRaftConsensusServiceAsync().appendEntries(request);
+                    raftNode.checkAppendResponse(peer, response, request.getPrevLogIndex(),
+                            raftNode.proxyPackEntries(peer.getNextIndex()));
+                }
+            }
+        }
+
         try {
             RaftProto.AppendEntriesResponse.Builder responseBuilder
                     = RaftProto.AppendEntriesResponse.newBuilder();

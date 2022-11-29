@@ -13,7 +13,7 @@ public class RaftOptions {
 
     // A follower would become a candidate if it doesn't receive any message
     // from the leader in electionTimeoutMs milliseconds
-    private int electionTimeoutMilliseconds = 250000;
+    private int electionTimeoutMilliseconds = 10000;
 
     // A leader sends RPCs at least this often, even if there is no data to send
     private int heartbeatPeriodMilliseconds = 5000;
@@ -50,4 +50,6 @@ public class RaftOptions {
     private long maxBeatTime = 5000;
 
     private long timeInterval = 400;
+
+    private boolean secretaryWrite = false;
 }
