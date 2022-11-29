@@ -745,6 +745,8 @@ public class RaftNode {
 //            });
 //        }
 //        resetHeartbeatTimer();
+
+        LOG.debug("start new heartbeat, peers={}", peerMap.keySet());
         for(final Peer peer : peerMap.values()){
             LOG.debug("Peer in: {}", peer.getServer().getServerId());
             delayQueue.add(peer.buildDelayTime(HeartModel.getDelayTimer(peer, raftOptions)));

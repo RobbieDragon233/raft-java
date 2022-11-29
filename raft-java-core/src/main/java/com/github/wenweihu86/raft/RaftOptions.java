@@ -13,7 +13,7 @@ public class RaftOptions {
 
     // A follower would become a candidate if it doesn't receive any message
     // from the leader in electionTimeoutMs milliseconds
-    private int electionTimeoutMilliseconds = 5000;
+    private int electionTimeoutMilliseconds = 50000;
 
     // A leader sends RPCs at least this often, even if there is no data to send
     private int heartbeatPeriodMilliseconds = 500;
@@ -45,9 +45,9 @@ public class RaftOptions {
     // raft的log和snapshot父目录，绝对路径
     private String dataDir = System.getProperty("com.github.wenweihu86.raft.data.dir");
 
-    private long minBeatTime = 300;
+    private long minBeatTime = 100;
 
-    private long maxBeatTime = 500;
+    private long maxBeatTime = 300;
 
     private long timeInterval = 20;
 }
