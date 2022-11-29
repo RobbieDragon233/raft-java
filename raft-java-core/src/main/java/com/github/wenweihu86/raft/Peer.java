@@ -77,11 +77,10 @@ public class Peer implements Delayed {
         isCatchUp = catchUp;
     }
 
-    long delayTime;
     long expire;
 
     public Peer buildDelayTime(long delayTime){
-        this.delayTime = delayTime;
+        this.expire = System.currentTimeMillis() + delayTime;
         return this;
     }
 
