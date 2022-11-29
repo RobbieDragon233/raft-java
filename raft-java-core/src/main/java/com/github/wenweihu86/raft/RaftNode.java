@@ -746,9 +746,9 @@ public class RaftNode {
 //        }
 //        resetHeartbeatTimer();
 
-        LOG.debug("start new heartbeat, peers={}", peerMap.keySet());
+        LOG.info("start new heartbeat, peers={}", peerMap.keySet());
         for(final Peer peer : peerMap.values()){
-            LOG.debug("Peer in: {}", peer.getServer().getServerId());
+            LOG.info("Peer in: {}", peer.getServer().getServerId());
             delayQueue.add(peer.buildDelayTime(HeartModel.getDelayTimer(peer, raftOptions)));
         }
         doHeartBeatTimer();
@@ -759,11 +759,11 @@ public class RaftNode {
             while (delayQueue.isEmpty()) {
                 try {
                     final Peer peer = delayQueue.take();
-                    LOG.debug("Peer: {}, Time: {}", peer.getServer().getServerId(), System.currentTimeMillis());
+                    LOG.info("Peer: {}, Time: {}", peer.getServer().getServerId(), System.currentTimeMillis());
                     appendEntries(peer);
                     delayQueue.add(peer.buildDelayTime(HeartModel.getDelayTimer(peer, raftOptions)));
                 } catch (InterruptedException e) {
-                    LOG.debug("new HeartBeat error");
+                    LOG.info("new HeartBeat error");
                     e.printStackTrace();
                 }
             }
