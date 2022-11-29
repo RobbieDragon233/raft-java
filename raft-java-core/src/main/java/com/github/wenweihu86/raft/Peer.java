@@ -6,10 +6,13 @@ import com.baidu.brpc.client.instance.Endpoint;
 import com.github.wenweihu86.raft.proto.RaftProto;
 import com.github.wenweihu86.raft.service.RaftConsensusServiceAsync;
 
+import java.util.concurrent.Delayed;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Created by wenweihu86 on 2017/5/5.
  */
-public class Peer {
+public class Peer implements Delayed {
     private RaftProto.Server server;
     private RpcClient rpcClient;
     private RaftConsensusServiceAsync raftConsensusServiceAsync;
@@ -73,4 +76,25 @@ public class Peer {
     public void setCatchUp(boolean catchUp) {
         isCatchUp = catchUp;
     }
+
+    long delayTime;
+    long expire;
+
+    public Peer buildDelayTime(long delayTime){
+        this.delayTime = delayTime;
+        return this;
+    }
+
+    @Override
+    public long getDelay(TimeUnit unit) {
+        return unit.convert(this.expire - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    @Override
+    public int compareTo(Delayed o) {
+        long f = this.getDelay(TimeUnit.MILLISECONDS) - o.getDelay(TimeUnit.MILLISECONDS);
+        return (int) f;
+    }
+
+
 }

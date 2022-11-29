@@ -67,6 +67,8 @@ public class RaftNode {
     private ScheduledFuture electionScheduledFuture;
     private ScheduledFuture heartbeatScheduledFuture;
 
+    private DelayQueue<Peer> delayQueue;
+
     public RaftNode(RaftOptions raftOptions,
                     List<RaftProto.Server> servers,
                     RaftProto.Server localServer,
@@ -137,6 +139,8 @@ public class RaftNode {
                 takeSnapshot();
             }
         }, raftOptions.getSnapshotPeriodSeconds(), raftOptions.getSnapshotPeriodSeconds(), TimeUnit.SECONDS);
+
+        delayQueue = new DelayQueue<Peer>();
         // start election
         resetElectionTimer();
     }
@@ -715,27 +719,53 @@ public class RaftNode {
         if (heartbeatScheduledFuture != null && !heartbeatScheduledFuture.isDone()) {
             heartbeatScheduledFuture.cancel(true);
         }
-        heartbeatScheduledFuture = scheduledExecutorService.schedule(new Runnable() {
-            @Override
-            public void run() {
-                startNewHeartbeat();
-            }
-        }, raftOptions.getHeartbeatPeriodMilliseconds(), TimeUnit.MILLISECONDS);
+        heartbeatScheduledFuture = scheduledExecutorService.schedule(
+                new Runnable() {
+                    @Override
+                    public void run() {
+                        startNewHeartbeat();
+                    }
+                },
+                raftOptions.getHeartbeatPeriodMilliseconds(),
+                TimeUnit.MILLISECONDS);
     }
 
     // in lock, 开始心跳，对leader有效
     // todo 心跳改动
+    // 之前的逻辑是：每隔一段时间，进行心跳；
+    // 修改的逻辑是：每个心跳，间隔一段时间
     private void startNewHeartbeat() {
-        LOG.debug("start new heartbeat, peers={}", peerMap.keySet());
-        for (final Peer peer : peerMap.values()) {
-            executorService.submit(new Runnable() {
-                @Override
-                public void run() {
-                    appendEntries(peer);
-                }
-            });
+//        LOG.debug("start new heartbeat, peers={}", peerMap.keySet());
+//        for (final Peer peer : peerMap.values()) {
+//            executorService.submit(new Runnable() {
+//                @Override
+//                public void run() {
+//                    appendEntries(peer);
+//                }
+//            });
+//        }
+//        resetHeartbeatTimer();
+        for(final Peer peer : peerMap.values()){
+            delayQueue.add(peer.buildDelayTime(HeartModel.getDelayTimer(peer, raftOptions)));
         }
-        resetHeartbeatTimer();
+        doHeartBeatTimer();
+    }
+
+    private void doHeartBeatTimer() {
+        executorService.submit(() -> {
+            while (delayQueue.isEmpty()) {
+                try {
+                    final Peer peer = delayQueue.take();
+                    LOG.debug("Peer: {}, Time: {}", peer.getServer().getServerId(), System.currentTimeMillis());
+                    appendEntries(peer);
+                    delayQueue.add(peer.buildDelayTime(HeartModel.getDelayTimer(peer, raftOptions)));
+                } catch (InterruptedException e) {
+                    LOG.debug("new HeartBeat error");
+                    e.printStackTrace();
+                }
+            }
+            startNewHeartbeat();
+        });
     }
 
     // in lock, for leader

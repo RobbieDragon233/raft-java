@@ -44,4 +44,10 @@ public class RaftOptions {
 
     // raft的log和snapshot父目录，绝对路径
     private String dataDir = System.getProperty("com.github.wenweihu86.raft.data.dir");
+
+    private long minBeatTime = 300;
+
+    private long maxBeatTime = 700;
+
+    private long timeInterval = 20;
 }
