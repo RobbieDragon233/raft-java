@@ -756,7 +756,7 @@ public class RaftNode {
 
     private void doHeartBeatTimer() {
         executorService.submit(() -> {
-            while (delayQueue.isEmpty()) {
+            while (!delayQueue.isEmpty()) {
                 try {
                     final Peer peer = delayQueue.take();
                     LOG.info("Peer: {}, Time: {}", peer.getServer().getServerId(), System.currentTimeMillis());
