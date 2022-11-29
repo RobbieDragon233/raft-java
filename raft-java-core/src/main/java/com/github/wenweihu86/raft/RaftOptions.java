@@ -47,7 +47,7 @@ public class RaftOptions {
 
     private long minBeatTime = 300;
 
-    private long maxBeatTime = 700;
+    private long maxBeatTime = 500;
 
     private long timeInterval = 20;
 }
